@@ -1,0 +1,2 @@
+cd "/home/hermione/Main/Projects/Local LLM/FeatherLLM/LLM"
+"/home/hermione/Main/Projects/Local LLM/FeatherLLM/LLM/.venv/bin/python" cli/main.py --model models/model.gguf --prompt "Hi" --threads 4 --max-tokens 50 --ctx 512

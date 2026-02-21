@@ -1,0 +1,1763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediCommand | AI Emergency Triage Engine</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#e21d48',
+                        'primary-dark': '#c4123a',
+                        'background-light': '#f8f6f6',
+                        'background-dark': '#0a0506',
+                        'card-dark': '#1a0d10',
+                        'border-dark': '#2d161b',
+                        success: '#10b981',
+                        warning: '#f59e0b',
+                        danger: '#ef4444'
+                    },
+                    fontFamily: {
+                        display: ['Inter', 'sans-serif']
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'ticker': 'ticker 30s linear infinite'
+                    },
+                    keyframes: {
+                        ticker: {
+                            '0%': { transform: 'translateX(0)' },
+                            '100%': { transform: 'translateX(-50%)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        
+        /* Glassmorphism */
+        .glass {
+            background: rgba(10, 20, 35, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(59, 130, 246, 0.15);
+        }
+        
+        .glass-light {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        /* Map Pulse Animation */
+        .map-marker {
+            position: relative;
+        }
+        
+        .map-marker::after {
+            content: '';
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: rgba(226, 29, 72, 0.3);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: markerPulse 2s ease-out infinite;
+            z-index: -1;
+        }
+        
+        @keyframes markerPulse {
+            0% {
+                transform: translate(-50%, -50%) scale(0.5);
+                opacity: 0.8;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(2);
+                opacity: 0;
+            }
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* Leaflet Custom Styles */
+        .leaflet-container {
+            background: #0a0506;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .leaflet-popup-content-wrapper {
+            background: rgba(10, 20, 35, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 29, 72, 0.3);
+            border-radius: 12px;
+            color: white;
+        }
+        
+        .leaflet-popup-tip {
+            background: rgba(10, 20, 35, 0.95);
+        }
+        
+        .leaflet-popup-content {
+            margin: 12px;
+        }
+        
+        /* Ticker Animation */
+        .ticker-wrap {
+            overflow: hidden;
+        }
+        
+        .ticker {
+            display: flex;
+            animation: ticker 40s linear infinite;
+            white-space: nowrap;
+        }
+        
+        @keyframes ticker {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        
+        /* Custom Map Controls */
+        .leaflet-control-zoom {
+            border: none !important;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+        }
+        
+        .leaflet-control-zoom a {
+            background: rgba(10, 20, 35, 0.9) !important;
+            color: white !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+        
+        .leaflet-control-zoom a:hover {
+            background: rgba(226, 29, 72, 0.8) !important;
+        }
+        
+        /* Emergency Triage Modal Styles */
+        .emergency-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .emergency-overlay.hidden {
+            display: none;
+        }
+        
+        .emergency-modal {
+            background: linear-gradient(145deg, #1a0d10 0%, #0a0506 100%);
+            border: 1px solid rgba(226, 29, 72, 0.3);
+            border-radius: 24px;
+            max-width: 900px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 80px rgba(226, 29, 72, 0.3), 0 0 60px rgba(0, 0, 0, 0.8);
+        }
+        
+        .emergency-header {
+            background: linear-gradient(135deg, rgba(226, 29, 72, 0.2) 0%, rgba(226, 29, 72, 0.05) 100%);
+            padding: 24px 32px;
+            border-bottom: 1px solid rgba(226, 29, 72, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .emergency-title {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .emergency-title .icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .close-emergency {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.3s;
+        }
+        
+        .close-emergency:hover {
+            background: rgba(226, 29, 72, 0.3);
+            border-color: rgba(226, 29, 72, 0.5);
+        }
+        
+        .emergency-content {
+            padding: 32px;
+        }
+        
+        /* Emergency Type Grid */
+        .emergency-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+        
+        .emergency-type-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 24px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .emergency-type-card:hover {
+            background: rgba(226, 29, 72, 0.1);
+            border-color: rgba(226, 29, 72, 0.4);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(226, 29, 72, 0.2);
+        }
+        
+        .emergency-type-card .icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+        }
+        
+        .emergency-type-card span {
+            color: #e2e8f0;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        /* Protocol Steps */
+        .protocol-section {
+            margin-top: 24px;
+        }
+        
+        .protocol-step {
+            display: flex;
+            gap: 16px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            margin-bottom: 12px;
+            transition: all 0.3s;
+        }
+        
+        .protocol-step:hover {
+            background: rgba(255, 255, 255, 0.04);
+            border-color: rgba(226, 29, 72, 0.2);
+        }
+        
+        .protocol-step.active {
+            background: rgba(226, 29, 72, 0.1);
+            border-color: rgba(226, 29, 72, 0.4);
+        }
+        
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #e21d48 0%, #c4123a 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        
+        .step-content h4 {
+            color: white;
+            font-weight: 600;
+            margin-bottom: 6px;
+            font-size: 16px;
+        }
+        
+        .step-content p {
+            color: #94a3b8;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        /* CPR Timer */
+        .cpr-timer {
+            text-align: center;
+            padding: 40px;
+            background: rgba(226, 29, 72, 0.05);
+            border-radius: 20px;
+            border: 1px solid rgba(226, 29, 72, 0.2);
+        }
+        
+        .cpr-timer-display {
+            font-size: 96px;
+            font-weight: 800;
+            color: #e21d48;
+            font-family: 'Courier New', monospace;
+            line-height: 1;
+            text-shadow: 0 0 40px rgba(226, 29, 72, 0.5);
+        }
+        
+        .cpr-timer-label {
+            font-size: 18px;
+            color: #e2e8f0;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        
+        .cpr-counter {
+            font-size: 24px;
+            color: #94a3b8;
+            margin-bottom: 24px;
+        }
+        
+        .cpr-controls {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .cpr-btn {
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .cpr-btn-start {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+        
+        .cpr-btn-start:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 30px rgba(16, 185, 129, 0.4);
+        }
+        
+        .cpr-btn-stop {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+        }
+        
+        .cpr-btn-stop:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 30px rgba(239, 68, 68, 0.4);
+        }
+        
+        .cpr-btn-reset {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .cpr-btn-reset:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .cpr-compressions {
+            margin-top: 24px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+        }
+        
+        /* FAST Test */
+        .fast-test {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .fast-item {
+            padding: 24px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+        }
+        
+        .fast-item.completed {
+            border-color: rgba(16, 185, 129, 0.5);
+            background: rgba(16, 185, 129, 0.1);
+        }
+        
+        .fast-letter {
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #e21d48 0%, #c4123a 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        
+        .fast-letter.done {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        
+        .fast-content h4 {
+            color: white;
+            font-weight: 600;
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        
+        .fast-content p {
+            color: #94a3b8;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+        
+        .fast-btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+        }
+        
+        .fast-btn-yes {
+            background: #10b981;
+            color: white;
+        }
+        
+        .fast-btn-no {
+            background: rgba(255, 255, 255, 0.1);
+            color: #94a3b8;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .fast-result {
+            margin-top: 24px;
+            padding: 24px;
+            border-radius: 16px;
+            text-align: center;
+        }
+        
+        .fast-result.stroke {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.1) 100%);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+        }
+        
+        .fast-result.no-stroke {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.1) 100%);
+            border: 1px solid rgba(16, 185, 129, 0.5);
+        }
+        
+        .fast-result h3 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .fast-result.stroke h3 { color: #ef4444; }
+        .fast-result.no-stroke h3 { color: #10b981; }
+        
+        /* Checklist */
+        .checklist-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .checklist-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+        }
+        
+        .checklist-item.checked {
+            border-color: rgba(16, 185, 129, 0.5);
+            background: rgba(16, 185, 129, 0.08);
+        }
+        
+        .check-box {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: transparent;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+        
+        .checklist-item.checked .check-box {
+            background: #10b981;
+            border-color: #10b981;
+            color: white;
+        }
+        
+        .checklist-text {
+            color: #e2e8f0;
+            font-size: 15px;
+        }
+        
+        /* Voice Button */
+        .voice-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #e21d48 0%, #c4123a 100%);
+            border: none;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            box-shadow: 0 8px 40px rgba(226, 29, 72, 0.5);
+            z-index: 9998;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 8px 40px rgba(226, 29, 72, 0.5); }
+            50% { box-shadow: 0 8px 60px rgba(226, 29, 72, 0.8); }
+        }
+        
+        .voice-btn:hover {
+            transform: scale(1.1);
+        }
+        
+        .voice-btn.listening {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            animation: pulse-glow-green 1s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-glow-green {
+            0%, 100% { box-shadow: 0 8px 40px rgba(16, 185, 129, 0.5); }
+            50% { box-shadow: 0 8px 60px rgba(16, 185, 129, 0.8); }
+        }
+        
+        .emergency-trigger {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 24px;
+            background: linear-gradient(135deg, #e21d48 0%, #c4123a 100%);
+            border-radius: 14px;
+            color: white;
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s;
+            box-shadow: 0 8px 30px rgba(226, 29, 72, 0.4);
+        }
+        
+        .emergency-trigger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(226, 29, 72, 0.5);
+        }
+        
+        .abcde-flow {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .abcde-item {
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            text-align: center;
+        }
+        
+        .abcde-item.completed {
+            border-color: rgba(16, 185, 129, 0.5);
+            background: rgba(16, 185, 129, 0.1);
+        }
+        
+        .abcde-letter {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 22px;
+            margin: 0 auto 12px;
+        }
+        
+        .abcde-item.completed .abcde-letter {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        
+        .abcde-title {
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        
+        .abcde-desc {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 24px;
+        }
+        
+        .action-btn {
+            padding: 14px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .action-btn-call {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+        
+        .action-btn-call:hover {
+            box-shadow: 0 8px 30px rgba(16, 185, 129, 0.4);
+        }
+        
+        .action-btn-back {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .action-btn-back:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .emergency-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .emergency-header {
+                padding: 16px 20px;
+            }
+            
+            .emergency-content {
+                padding: 20px;
+            }
+            
+            .cpr-timer-display {
+                font-size: 72px;
+            }
+            
+            .voice-btn {
+                bottom: 20px;
+                right: 20px;
+                width: 60px;
+                height: 60px;
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark min-h-screen flex flex-col overflow-x-hidden">
+    
+    <!-- Sticky Glassmorphic Top Nav -->
+    <nav class="sticky top-0 z-50 w-full border-b border-white/5 bg-background-dark/85 backdrop-blur-xl">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Logo -->
+            <div class="flex items-center gap-3">
+                <div class="bg-primary p-2 rounded-lg flex items-center justify-center shadow-lg shadow-primary/30">
+                    <span class="material-symbols-outlined text-white text-xl">health_and_safety</span>
+                </div>
+                <h1 class="text-xl font-bold tracking-tight text-white">Feather</h1>
+            </div>
+            
+            <!-- Desktop Nav -->
+            <div class="hidden md:flex items-center gap-8">
+                <a class="text-sm font-medium text-slate-400 hover:text-primary transition-all duration-200" href="hospital-availability.html">
+                    Find Hospital
+                </a>
+                <a class="text-sm font-medium text-slate-400 hover:text-primary transition-all duration-200" href="#">
+                    AI First Aid
+                </a>
+                <a class="text-sm font-medium text-slate-400 hover:text-primary transition-all duration-200" href="#">
+                    Blood Bank
+                </a>
+            </div>
+            
+            <!-- CTA Buttons -->
+            <div class="flex items-center gap-4">
+                <button class="text-sm font-medium text-slate-400 hover:text-white transition-colors hidden sm:block">Log In</button>
+                <button class="bg-primary hover:bg-primary-dark text-white px-5 py-2 rounded-lg text-sm font-bold transition-all shadow-lg shadow-primary/25 hover:shadow-primary/40">
+                    Get Started
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-1 flex flex-col">
+        <!-- Hero Section: Split View -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 min-h-[calc(100vh-4rem)]">
+            
+            <!-- Left: Interactive Map -->
+            <div class="lg:col-span-8 relative bg-zinc-900 overflow-hidden border-r border-white/5">
+                <!-- Map Container -->
+                <div id="map" class="absolute inset-0 w-full h-full"></div>
+                
+                <!-- Map Overlay - Top Left Card -->
+                <div class="absolute left-4 top-4 z-[1000] pointer-events-auto">
+                    <div class="glass p-4 rounded-xl border border-white/10 shadow-2xl flex items-start gap-4 max-w-xs">
+                        <div class="size-10 rounded-lg bg-success/20 flex items-center justify-center text-success shrink-0">
+                            <span class="material-symbols-outlined">local_hospital</span>
+                        </div>
+                        <div>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Closest Match</p>
+                            <h3 class="text-white font-bold text-sm" id="closestHospital">Apollo Hospital</h3>
+                            <div class="flex items-center gap-2 mt-1 flex-wrap">
+                                <span class="text-primary text-sm font-bold" id="travelTime">5 mins</span>
+                                <span class="size-1 bg-slate-600 rounded-full"></span>
+                                <span class="text-success text-xs font-medium uppercase tracking-tighter">ER Open</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Map Overlay - Bottom Right Card -->
+                <div class="absolute bottom-4 right-4 z-[1000] pointer-events-auto">
+                    <div class="glass p-4 rounded-xl border border-white/10 shadow-2xl flex items-start gap-4 max-w-xs">
+                        <div class="size-10 rounded-lg bg-primary/20 flex items-center justify-center text-primary shrink-0">
+                            <span class="material-symbols-outlined">route</span>
+                        </div>
+                        <div>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Alternative</p>
+                            <h3 class="text-white font-bold text-sm">City General Hospital</h3>
+                            <div class="flex items-center gap-2 mt-1">
+                                <span class="text-slate-300 text-sm font-medium">12 mins</span>
+                                <span class="size-1 bg-slate-600 rounded-full"></span>
+                                <span class="text-warning text-xs font-medium uppercase tracking-tighter">High Traffic</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Locate Me Button -->
+                <button onclick="locateUser()" class="absolute left-4 bottom-4 z-[1000] glass flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm font-bold text-primary shadow-lg backdrop-blur-md transition-all hover:bg-primary/10">
+                    <span class="material-symbols-outlined text-sm">my_location</span>
+                    My Location
+                </button>
+            </div>
+            
+            <!-- Right: Quick Triage & Actions -->
+            <div class="lg:col-span-4 bg-card-dark p-6 lg:p-8 flex flex-col gap-6 overflow-y-auto">
+                <div class="flex flex-col gap-2">
+                    <span class="text-primary text-xs font-bold uppercase tracking-[0.2em] flex items-center gap-2">
+                        <span class="size-2 bg-primary rounded-full animate-pulse"></span>
+                        AI Medical Assistant
+                    </span>
+                    <h2 class="text-2xl lg:text-3xl font-bold text-white leading-tight">Describe Your Symptoms</h2>
+                    <p class="text-slate-400 text-sm leading-relaxed">Tell us what you're experiencing, and our AI will help find the right care for you.</p>
+                </div>
+                
+                <!-- Triage Card -->
+                <div class="flex flex-col gap-4 bg-background-dark/50 rounded-2xl p-5 border border-white/5">
+                    <label for="symptomsInput" class="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">edit_note</span>
+                        What symptoms are you experiencing?
+                    </label>
+                    <div class="relative">
+                        <textarea 
+                            id="symptomsInput"
+                            class="w-full bg-background-dark border border-border-dark rounded-xl p-4 text-white placeholder:text-slate-600 focus:ring-2 focus:ring-primary focus:border-primary transition-all resize-none min-h-[140px] text-base" 
+                            placeholder="e.g., severe chest pain, shortness of breath, blurred vision..."
+                        ></textarea>
+                        <div class="absolute bottom-3 right-3 flex items-center gap-2 text-[10px] text-slate-500 font-mono uppercase cursor-pointer hover:text-primary transition-colors bg-background-dark/80 px-2 py-1 rounded-full">
+                            <span class="material-symbols-outlined text-sm">mic</span> Voice
+                        </div>
+                    </div>
+                    <button onclick="analyzeSymptoms()" class="w-full bg-primary hover:bg-primary/90 text-white h-14 rounded-xl font-bold flex items-center justify-center gap-3 transition-all group shadow-lg shadow-primary/20 hover:shadow-primary/40">
+                        <span class="text-base">Analyze My Symptoms</span>
+                        <span class="material-symbols-outlined text-xl group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                    </button>
+                </div>
+                
+                <!-- Emergency Conditions Grid -->
+                <div class="flex flex-col gap-4 pt-4 border-t border-white/5">
+                    <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">emergency</span>
+                        Common Emergency Conditions
+                    </h3>
+                    
+                    <!-- Big Box Grid Layout -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <!-- Cardiac Arrest - Red -->
+                        <button onclick="setSymptom('Cardiac Arrest')" class="group relative overflow-hidden rounded-2xl border-2 border-red-500/30 bg-gradient-to-br from-red-500/20 to-red-600/10 p-4 text-left transition-all hover:border-red-500 hover:from-red-500/30 hover:to-red-600/20 hover:scale-[1.02] hover:shadow-lg hover:shadow-red-500/20">
+                            <div class="absolute -right-4 -top-4 size-16 bg-red-500/10 rounded-full blur-xl group-hover:bg-red-500/20 transition-all"></div>
+                            <div class="relative">
+                                <div class="size-10 rounded-xl bg-red-500/20 flex items-center justify-center mb-3 group-hover:bg-red-500/30 transition-all">
+                                    <span class="material-symbols-outlined text-red-400 text-xl">favorite</span>
+                                </div>
+                                <h4 class="text-white font-bold text-sm mb-1">Cardiac Arrest</h4>
+                                <p class="text-red-300/70 text-xs">Heart stopped, no pulse</p>
+                            </div>
+                            <div class="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span class="material-symbols-outlined text-red-400">arrow_forward</span>
+                            </div>
+                        </button>
+                        
+                        <!-- Stroke - Purple -->
+                        <button onclick="setSymptom('Stroke')" class="group relative overflow-hidden rounded-2xl border-2 border-purple-500/30 bg-gradient-to-br from-purple-500/20 to-purple-600/10 p-4 text-left transition-all hover:border-purple-500 hover:from-purple-500/30 hover:to-purple-600/20 hover:scale-[1.02] hover:shadow-lg hover:shadow-purple-500/20">
+                            <div class="absolute -right-4 -top-4 size-16 bg-purple-500/10 rounded-full blur-xl group-hover:bg-purple-500/20 transition-all"></div>
+                            <div class="relative">
+                                <div class="size-10 rounded-xl bg-purple-500/20 flex items-center justify-center mb-3 group-hover:bg-purple-500/30 transition-all">
+                                    <span class="material-symbols-outlined text-purple-400 text-xl">psychology</span>
+                                </div>
+                                <h4 class="text-white font-bold text-sm mb-1">Stroke</h4>
+                                <p class="text-purple-300/70 text-xs">Face drooping, speech issues</p>
+                            </div>
+                            <div class="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span class="material-symbols-outlined text-purple-400">arrow_forward</span>
+                            </div>
+                        </button>
+                        
+                        <!-- Accident/Trauma - Orange -->
+                        <button onclick="setSymptom('Accident')" class="group relative overflow-hidden rounded-2xl border-2 border-orange-500/30 bg-gradient-to-br from-orange-500/20 to-orange-600/10 p-4 text-left transition-all hover:border-orange-500 hover:from-orange-500/30 hover:to-orange-600/20 hover:scale-[1.02] hover:shadow-lg hover:shadow-orange-500/20">
+                            <div class="absolute -right-4 -top-4 size-16 bg-orange-500/10 rounded-full blur-xl group-hover:bg-orange-500/20 transition-all"></div>
+                            <div class="relative">
+                                <div class="size-10 rounded-xl bg-orange-500/20 flex items-center justify-center mb-3 group-hover:bg-orange-500/30 transition-all">
+                                    <span class="material-symbols-outlined text-orange-400 text-xl">car_crash</span>
+                                </div>
+                                <h4 class="text-white font-bold text-sm mb-1">Accident</h4>
+                                <p class="text-orange-300/70 text-xs">Trauma, bleeding, injuries</p>
+                            </div>
+                            <div class="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span class="material-symbols-outlined text-orange-400">arrow_forward</span>
+                            </div>
+                        </button>
+                        
+                        <!-- Burn - Yellow -->
+                        <button onclick="setSymptom('Burn')" class="group relative overflow-hidden rounded-2xl border-2 border-yellow-500/30 bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 p-4 text-left transition-all hover:border-yellow-500 hover:from-yellow-500/30 hover:to-yellow-600/20 hover:scale-[1.02] hover:shadow-lg hover:shadow-yellow-500/20">
+                            <div class="absolute -right-4 -top-4 size-16 bg-yellow-500/10 rounded-full blur-xl group-hover:bg-yellow-500/20 transition-all"></div>
+                            <div class="relative">
+                                <div class="size-10 rounded-xl bg-yellow-500/20 flex items-center justify-center mb-3 group-hover:bg-yellow-500/30 transition-all">
+                                    <span class="material-symbols-outlined text-yellow-400 text-xl">fire_extinguisher</span>
+                                </div>
+                                <h4 class="text-white font-bold text-sm mb-1">Burn Care</h4>
+                                <p class="text-yellow-300/70 text-xs">Thermal, chemical burns</p>
+                            </div>
+                            <div class="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span class="material-symbols-outlined text-yellow-400">arrow_forward</span>
+                            </div>
+                        </button>
+                        
+                        <!-- Fracture - Blue -->
+                        <button onclick="setSymptom('Fracture')" class="group relative overflow-hidden rounded-2xl border-2 border-blue-500/30 bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-4 text-left transition-all hover:border-blue-500 hover:from-blue-500/30 hover:to-blue-600/20 hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/20">
+                            <div class="absolute -right-4 -top-4 size-16 bg-blue-500/10 rounded-full blur-xl group-hover:bg-blue-500/20 transition-all"></div>
+                            <div class="relative">
+                                <div class="size-10 rounded-xl bg-blue-500/20 flex items-center justify-center mb-3 group-hover:bg-blue-500/30 transition-all">
+                                    <span class="material-symbols-outlined text-blue-400 text-xl">skeleton</span>
+                                </div>
+                                <h4 class="text-white font-bold text-sm mb-1">Fracture</h4>
+                                <p class="text-blue-300/70 text-xs">Broken bones, sprains</p>
+                            </div>
+                            <div class="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span class="material-symbols-outlined text-blue-400">arrow_forward</span>
+                            </div>
+                        </button>
+                        
+                        <!-- Respiratory - Cyan -->
+                        <button onclick="setSymptom('Breathing Difficulty')" class="group relative overflow-hidden rounded-2xl border-2 border-cyan-500/30 bg-gradient-to-br from-cyan-500/20 to-cyan-600/10 p-4 text-left transition-all hover:border-cyan-500 hover:from-cyan-500/30 hover:to-cyan-600/20 hover:scale-[1.02] hover:shadow-lg hover:shadow-cyan-500/20">
+                            <div class="absolute -right-4 -top-4 size-16 bg-cyan-500/10 rounded-full blur-xl group-hover:bg-cyan-500/20 transition-all"></div>
+                            <div class="relative">
+                                <div class="size-10 rounded-xl bg-cyan-500/20 flex items-center justify-center mb-3 group-hover:bg-cyan-500/30 transition-all">
+                                    <span class="material-symbols-outlined text-cyan-400 text-xl">air</span>
+                                </div>
+                                <h4 class="text-white font-bold text-sm mb-1">Breathing</h4>
+                                <p class="text-cyan-300/70 text-xs">Shortness of breath</p>
+                            </div>
+                            <div class="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span class="material-symbols-outlined text-cyan-400">arrow_forward</span>
+                            </div>
+                        </button>
+                    </div>
+                    
+                    <p class="text-xs text-slate-500 text-center mt-2">Tap any condition to analyze symptoms</p>
+                </div>
+                
+                <!-- Live Status Metrics -->
+                <div class="mt-auto grid grid-cols-1 gap-4">
+                    <div class="glass rounded-2xl p-5 flex items-center justify-between border border-green-500/20 bg-gradient-to-r from-green-500/5 to-transparent">
+                        <div class="flex items-center gap-4">
+                            <div class="size-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                                <span class="material-symbols-outlined text-green-400 text-xl">verified</span>
+                            </div>
+                            <div>
+                                <p class="text-xs text-slate-500 font-bold uppercase tracking-wider">System Status</p>
+                                <p class="text-xl font-bold text-white flex items-center gap-2">
+                                    <span class="size-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></span>
+                                    154 Hospitals Online
+                                </p>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined text-slate-700 text-3xl">sensors</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="glass rounded-2xl p-4 border border-white/5">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="material-symbols-outlined text-blue-400 text-lg">speed</span>
+                                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Avg Response</p>
+                            </div>
+                            <p class="text-2xl font-bold text-white">4.2<span class="text-sm text-slate-500 font-normal">min</span></p>
+                        </div>
+                        <div class="glass rounded-2xl p-4 border border-white/5">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="material-symbols-outlined text-primary text-lg">bed</span>
+                                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Available Beds</p>
+                            </div>
+                            <p class="text-2xl font-bold text-primary">892</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Metric Bar -->
+        <div class="bg-background-dark border-t border-white/5 py-4 overflow-hidden">
+            <div class="ticker-wrap">
+                <div class="ticker">
+                    <div class="flex items-center gap-2 mx-8 text-xs font-medium text-slate-500">
+                        <span class="material-symbols-outlined text-sm text-primary">verified</span> AI Dispatch Certified
+                    </div>
+                    <div class="flex items-center gap-2 mx-8 text-xs font-medium text-slate-500">
+                        <span class="material-symbols-outlined text-sm text-primary">bloodtype</span> Blood Inventory: Critical [O-]
+                    </div>
+                    <div class="flex items-center gap-2 mx-8 text-xs font-medium text-slate-500">
+                        <span class="material-symbols-outlined text-sm text-primary">shield</span> HIPAA Level Security
+                    </div>
+                    <div class="flex items-center gap-2 mx-8 text-xs font-medium text-slate-500">
+                        <span class="material-symbols-outlined text-sm text-primary">hub</span> Neural Integration: Active
+                    </div>
+                    <div class="flex items-center gap-2 mx-8 text-xs font-medium text-slate-500">
+                        <span class="material-symbols-outlined text-sm text-success">public</span> Regional Sync: 0.04ms
+                    </div>
+                    <!-- Duplicate for seamless loop -->
+                    <div class="flex items-center gap-2 mx-8 text-xs font-medium text-slate-500">
+                        <span class="material-symbols-outlined text-sm text-primary">verified</span> AI Dispatch Certified
+                    </div>
+                    <div class="flex items-center gap-2 mx-8 text-xs font-medium text-slate-500">
+                        <span class="material-symbols-outlined text-sm text-primary">bloodtype</span> Blood Inventory: Critical [O-]
+                    </div>
+                    <div class="flex items-center gap-2 mx-8 text-xs font-medium text-slate-500">
+                        <span class="material-symbols-outlined text-sm text-primary">shield</span> HIPAA Level Security
+                    </div>
+                    <div class="flex items-center gap-2 mx-8 text-xs font-medium text-slate-500">
+                        <span class="material-symbols-outlined text-sm text-primary">hub</span> Neural Integration: Active
+                    </div>
+                    <div class="flex items-center gap-2 mx-8 text-xs font-medium text-slate-500">
+                        <span class="material-symbols-outlined text-sm text-success">public</span> Regional Sync: 0.04ms
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Minimal Footer -->
+    <footer class="bg-background-dark border-t border-white/5 py-6">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <p class="text-slate-600 text-xs">© 2026 MediCommand Platform. All rights reserved.</p>
+            <div class="flex items-center gap-6">
+                <a class="text-slate-600 hover:text-slate-400 text-xs transition-colors" href="#">Privacy Protocol</a>
+                <a class="text-slate-600 hover:text-slate-400 text-xs transition-colors" href="#">Terms of Service</a>
+                <a class="text-slate-600 hover:text-slate-400 text-xs transition-colors" href="#">System Status</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Emergency Trigger Button -->
+    <button onclick="openEmergencyTriage()" class="emergency-trigger">
+        <i class="fas fa-heartbeat"></i>
+        <span>EMERGENCY TRIAGE</span>
+    </button>
+
+    <!-- Voice Button -->
+    <button onclick="toggleVoice()" class="voice-btn" id="voiceBtn">
+        <i class="fas fa-microphone"></i>
+    </button>
+
+    <!-- Emergency Triage Overlay -->
+    <div class="emergency-overlay hidden" id="emergencyOverlay">
+        <div class="emergency-modal">
+            <!-- Header -->
+            <div class="emergency-header">
+                <div class="emergency-title">
+                    <div class="icon bg-primary/20 text-primary">
+                        <i class="fas fa-heartbeat"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-2xl font-bold text-white">AI Emergency Triage</h2>
+                        <p class="text-slate-400 text-sm">First 60 Seconds - Stay Calm, Follow Steps</p>
+                    </div>
+                </div>
+                <button class="close-emergency" onclick="closeEmergencyTriage()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Content -->
+            <div class="emergency-content" id="emergencyContent">
+                <!-- Emergency Type Selection -->
+                <div id="emergencyTypeSelect">
+                    <p class="text-slate-400 mb-6">Select the type of emergency:</p>
+                    <div class="emergency-grid">
+                        <div class="emergency-type-card" onclick="selectEmergency('cardiac')">
+                            <div class="icon bg-red-500/20 text-red-500"><i class="fas fa-heart"></i></div>
+                            <span>Cardiac Arrest</span>
+                        </div>
+                        <div class="emergency-type-card" onclick="selectEmergency('stroke')">
+                            <div class="icon bg-purple-500/20 text-purple-500"><i class="fas fa-brain"></i></div>
+                            <span>Stroke</span>
+                        </div>
+                        <div class="emergency-type-card" onclick="selectEmergency('trauma')">
+                            <div class="icon bg-orange-500/20 text-orange-500"><i class="fas fa-car-crash"></i></div>
+                            <span>Trauma/Bleeding</span>
+                        </div>
+                        <div class="emergency-type-card" onclick="selectEmergency('burn')">
+                            <div class="icon bg-yellow-500/20 text-yellow-500"><i class="fas fa-fire"></i></div>
+                            <span>Burn</span>
+                        </div>
+                        <div class="emergency-type-card" onclick="selectEmergency('poisoning')">
+                            <div class="icon bg-green-500/20 text-green-500"><i class="fas fa-skull-crossbones"></i></div>
+                            <span>Poisoning</span>
+                        </div>
+                        <div class="emergency-type-card" onclick="selectEmergency('snakebite')">
+                            <div class="icon bg-emerald-500/20 text-emerald-500"><i class="fas fa-staff-snake"></i></div>
+                            <span>Snakebite</span>
+                        </div>
+                        <div class="emergency-type-card" onclick="selectEmergency('maternal')">
+                            <div class="icon bg-pink-500/20 text-pink-500"><i class="fas fa-baby"></i></div>
+                            <span>Maternal</span>
+                        </div>
+                        <div class="emergency-type-card" onclick="selectEmergency('seizure')">
+                            <div class="icon bg-indigo-500/20 text-indigo-500"><i class="fas fa-bolt"></i></div>
+                            <span>Seizure</span>
+                        </div>
+                        <div class="emergency-type-card" onclick="selectEmergency('child')">
+                            <div class="icon bg-cyan-500/20 text-cyan-500"><i class="fas fa-child"></i></div>
+                            <span>Child Emergency</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Dynamic Content Area -->
+                <div id="emergencyProtocol" class="hidden">
+                    <!-- Content will be injected by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // Hospital data with real coordinates (Gandhinagar, India region)
+        const hospitals = [
+            { id: 1, name: "Apollo Hospital", lat: 23.0548, lng: 72.6728, address: "Sector 16, Gandhinagar", beds: 150, erStatus: "Open", travelTime: 5 },
+            { id: 2, name: "Narayana Multispeciality", lat: 23.0768, lng: 72.6582, address: "Raman Road, Gandhinagar", beds: 200, erStatus: "Open", travelTime: 8 },
+            { id: 3, name: "Kiran Super Hospital", lat: 23.0273, lng: 72.5463, address: "Sola, Ahmedabad", beds: 85, erStatus: "Limited", travelTime: 12 },
+            { id: 4, name: "Sterling Hospital", lat: 23.0267, lng: 72.5065, address: "Memnagar, Ahmedabad", beds: 120, erStatus: "Open", travelTime: 15 },
+            { id: 5, name: "Govt. General Hospital", lat: 23.2215, lng: 72.6577, address: "Sector 16, Gandhinagar", beds: 300, erStatus: "Open", travelTime: 3 },
+            { id: 6, name: "Sal Hospital", lat: 23.0678, lng: 72.5212, address: "SG Highway, Ahmedabad", beds: 180, erStatus: "Open", travelTime: 10 },
+            { id: 7, name: "CIMS Hospital", lat: 23.0195, lng: 72.5098, address: "Bopal, Ahmedabad", beds: 250, erStatus: "Open", travelTime: 18 },
+            { id: 8, name: "Shalby Hospital", lat: 23.0367, lng: 72.5102, address: "Vastrapur, Ahmedabad", beds: 200, erStatus: "Limited", travelTime: 14 }
+        ];
+
+        // Initialize map centered on Gandhinagar
+        const map = L.map('map', {
+            zoomControl: false
+        }).setView([23.05, 72.58], 12);
+
+        // Add zoom control to top-right
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        // Add dark theme tile layer (CartoDB Dark Matter)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Custom marker icon
+        const createMarkerIcon = (isPrimary = false) => {
+            return L.divIcon({
+                className: 'custom-marker',
+                html: `
+                    <div class="map-marker flex items-center justify-center">
+                        <div class="w-8 h-8 ${isPrimary ? 'bg-primary' : 'bg-white'} rounded-full flex items-center justify-center shadow-lg border-2 ${isPrimary ? 'border-white' : 'border-primary'}">
+                            <span class="material-symbols-outlined text-sm ${isPrimary ? 'text-white' : 'text-primary'}">local_hospital</span>
+                        </div>
+                    </div>
+                `,
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+            });
+        };
+
+        // Add markers for all hospitals
+        const markers = {};
+        hospitals.forEach((hospital, index) => {
+            const marker = L.marker([hospital.lat, hospital.lng], {
+                icon: createMarkerIcon(index === 0)
+            }).addTo(map);
+            
+            marker.bindPopup(`
+                <div class="text-center">
+                    <h3 class="font-bold text-white text-sm">${hospital.name}</h3>
+                    <p class="text-slate-400 text-xs mt-1">${hospital.address}</p>
+                    <div class="flex items-center justify-center gap-3 mt-2">
+                        <span class="text-primary text-xs font-bold">${hospital.travelTime} min</span>
+                        <span class="text-success text-xs">${hospital.beds} beds</span>
+                    </div>
+                    <span class="inline-block mt-2 px-2 py-1 bg-success/20 text-success text-xs rounded-full">${hospital.erStatus}</span>
+                </div>
+            `);
+            
+            markers[hospital.id] = marker;
+        });
+
+        // User location marker
+        let userMarker = null;
+
+        // Locate user function
+        function locateUser() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const { latitude, longitude } = position.coords;
+                        
+                        // Remove existing user marker
+                        if (userMarker) {
+                            map.removeLayer(userMarker);
+                        }
+                        
+                        // Add user marker
+                        userMarker = L.marker([latitude, longitude], {
+                            icon: L.divIcon({
+                                className: 'user-marker',
+                                html: `
+                                    <div class="relative">
+                                        <div class="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white animate-pulse">
+                                            <span class="material-symbols-outlined text-white text-xs">person</span>
+                                        </div>
+                                    </div>
+                                `,
+                                iconSize: [24, 24],
+                                iconAnchor: [12, 12]
+                            })
+                        }).addTo(map);
+                        
+                        userMarker.bindPopup('<span class="text-white font-medium">You are here</span>');
+                        
+                        // Pan to user location
+                        map.flyTo([latitude, longitude], 14, { duration: 1 });
+                        
+                        // Find closest hospital
+                        findClosestHospital(latitude, longitude);
+                    },
+                    (error) => {
+                        alert('Unable to get your location. Please enable location services.');
+                    }
+                );
+            } else {
+                alert('Geolocation is not supported by your browser.');
+            }
+        }
+
+        // Find closest hospital
+        function findClosestHospital(userLat, userLng) {
+            let closest = null;
+            let minDistance = Infinity;
+            
+            hospitals.forEach(hospital => {
+                const distance = Math.sqrt(
+                    Math.pow(hospital.lat - userLat, 2) + 
+                    Math.pow(hospital.lng - userLng, 2)
+                );
+                
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closest = hospital;
+                }
+            });
+            
+            if (closest) {
+                document.getElementById('closestHospital').textContent = closest.name;
+                document.getElementById('travelTime').textContent = `${closest.travelTime} mins`;
+                
+                // Open popup for closest hospital
+                markers[closest.id].openPopup();
+            }
+        }
+
+        // Set symptom in textarea
+        function setSymptom(symptom) {
+            document.getElementById('symptomsInput').value = symptom;
+            document.getElementById('symptomsInput').focus();
+        }
+
+        // Analyze symptoms function
+        function analyzeSymptoms() {
+            const symptoms = document.getElementById('symptomsInput').value;
+            
+            if (!symptoms.trim()) {
+                alert('Please enter your symptoms first.');
+                return;
+            }
+            
+            // Simple symptom analysis
+            let analysis = '';
+            const lowerSymptoms = symptoms.toLowerCase();
+            
+            if (lowerSymptoms.includes('chest') || lowerSymptoms.includes('heart') || lowerSymptoms.includes('pain')) {
+                analysis = '⚠️ CARDIAC EMERGENCY - Call 102 immediately! \n\nRecommended: Nearest cardiac center with cath lab';
+            } else if (lowerSymptoms.includes('stroke') || lowerSymptoms.includes('face') || lowerSymptoms.includes('speech')) {
+                analysis = '⚠️ STROKE SUSPECTED - Act FAST! \n\nCall 102 within golden hour. Transport to stroke-ready hospital.';
+            } else if (lowerSymptoms.includes('breath') || lowerSymptoms.includes('breathing')) {
+                analysis = '⚠️ RESPIRATORY DISTRESS \n\nCheck airway. Administer oxygen if available. Transport to ER.';
+            } else if (lowerSymptoms.includes('burn')) {
+                analysis = '⚠️ BURN EMERGENCY \n\nCool with water (not ice). Do NOT apply butter/oil. Transport to burn center.';
+            } else if (lowerSymptoms.includes('accident') || lowerSymptoms.includes('bleed') || lowerSymptoms.includes('injury')) {
+                analysis = '⚠️ TRAUMA/BLEEDING \n\nApply direct pressure. Immobilize injured area. Call 102.';
+            } else {
+                analysis = '📋 Symptom analysis complete.\n\nOur AI recommends visiting the nearest emergency department. Please call 102 for emergency transport.';
+            }
+            
+            alert(analysis);
+        }
+
+        // Add custom styles for markers
+        const style = document.createElement('style');
+        style.textContent = `
+            .custom-marker, .user-marker {
+                background: transparent !important;
+                border: none !important;
+            }
+            .leaflet-popup-content {
+                margin: 0 !important;
+            }
+            .leaflet-popup-content-wrapper {
+                padding: 0 !important;
+            }
+        `;
+        document.head.appendChild(style);
+
+        // ========================
+        // EMERGENCY TRIAGE ENGINE
+        // ========================
+        
+        let currentEmergency = null;
+        let cprInterval = null;
+        let cprSeconds = 0;
+        let cprPhase = 'compression';
+        let compressionCount = 0;
+        let isListening = false;
+        let recognition = null;
+        let fastResults = { F: false, A: false, S: false, T: false };
+        let checklistStatus = {};
+
+        // Emergency Protocols Data
+        const emergencyProtocols = {
+            cardiac: {
+                title: 'Cardiac Arrest',
+                icon: 'fa-heart',
+                color: 'bg-red-500',
+                textColor: 'text-red-500',
+                protocol: [
+                    { title: 'Check Responsiveness', desc: 'Tap shoulders firmly. Ask Are you okay? Look for normal breathing.' },
+                    { title: 'Call for Help', desc: 'Shout for help. Call 102 or ask someone to call. Get AED if available.' },
+                    { title: 'Check Breathing', desc: 'Look for no breathing or only gasping (agonal breathing).' },
+                    { title: 'Start CPR', desc: 'Place heel of hand on center of chest. Push hard and fast: 100-120/min, 5-6cm deep.' },
+                    { title: 'Use AED', desc: 'As soon as AED arrives, turn on and follow voice prompts.' }
+                ],
+                showCPR: true
+            },
+            stroke: {
+                title: 'Stroke (FAST Test)',
+                icon: 'fa-brain',
+                color: 'bg-purple-500',
+                textColor: 'text-purple-500',
+                showFAST: true
+            },
+            trauma: {
+                title: 'Trauma and Bleeding',
+                icon: 'fa-car-crash',
+                color: 'bg-orange-500',
+                textColor: 'text-orange-500',
+                protocol: [
+                    { title: 'Ensure Safety', desc: 'Make sure the scene is safe. Check for ongoing danger.' },
+                    { title: 'Check ABCDE', desc: 'Airway, Breathing, Circulation, Disability, Exposure - quickly assess all.' },
+                    { title: 'Control Bleeding', desc: 'Apply direct pressure with clean cloth. Elevate if possible.' },
+                    { title: 'Tourniquet', desc: 'If bleeding wont stop and limb is at risk, apply tourniquet 2-3 inches above wound.' },
+                    { title: 'Immobilize', desc: 'Keep injured person still. Do NOT move unless absolutely necessary.' },
+                    { title: 'Monitor', desc: 'Watch for shock: pale skin, rapid breathing, confusion. Keep warm.' }
+                ]
+            },
+            burn: {
+                title: 'Burn Emergency',
+                icon: 'fa-fire',
+                color: 'bg-yellow-500',
+                textColor: 'text-yellow-500',
+                protocol: [
+                    { title: 'Stop the Burning', desc: 'Remove person from heat source. Extinguish flames - STOP, DROP, ROLL.' },
+                    { title: 'Cool the Burn', desc: 'Run cool (not cold) water for 10-20 minutes. Do NOT use ice.' },
+                    { title: 'Remove Clothing', desc: 'Carefully remove jewelry and loose clothing near burns. Do NOT pop blisters.' },
+                    { title: 'Cover Burn', desc: 'Use non-stick sterile dressing or clean cloth. Do NOT apply butter, oil, or toothpaste.' },
+                    { title: 'Assess Severity', desc: 'Major burns = deep, more than 3 inches, face/hands/feet/joints. Call 102 immediately.' },
+                    { title: 'Monitor Shock', desc: 'Watch for shock signs. Keep person warm and lying down if possible.' }
+                ]
+            },
+            poisoning: {
+                title: 'Poison Ingestion',
+                icon: 'fa-skull-crossbones',
+                color: 'bg-green-500',
+                textColor: 'text-green-500',
+                protocol: [
+                    { title: 'Identify Poison', desc: 'Try to identify what was swallowed. Keep container for reference.' },
+                    { title: 'Call Poison Control', desc: 'Call 1066 or local poison control immediately. Follow their instructions exactly.' },
+                    { title: 'Do NOT Induce Vomiting', desc: 'Unless specifically told by poison control. Some poisons cause more damage if vomited.' },
+                    { title: 'If Unconscious', desc: 'Place in recovery position. Monitor breathing. Be prepared to perform CPR.' },
+                    { title: 'Save Evidence', desc: 'Keep any remaining poison, vomit, or packaging. This helps medical teams.' }
+                ]
+            },
+            snakebite: {
+                title: 'Snakebite',
+                icon: 'fa-staff-snake',
+                color: 'bg-emerald-500',
+                textColor: 'text-emerald-500',
+                protocol: [
+                    { title: 'Move Away', desc: 'Move safely away from the snake. Do NOT try to catch or kill it.' },
+                    { title: 'Keep Calm', desc: 'Panic increases heart rate and spreads venom faster. Stay as calm as possible.' },
+                    { title: 'Immobilize', desc: 'Keep the bitten limb below heart level. Do NOT raise it.' },
+                    { title: 'Remove Constrictions', desc: 'Remove rings, watches, tight clothing before swelling starts.' },
+                    { title: 'Do NOT', desc: 'Do NOT cut wound, suck venom, apply tourniquet, or apply ice.' },
+                    { title: 'Get Help', desc: 'Call 102 immediately. Try to describe the snake if safe to do so.' }
+                ]
+            },
+            maternal: {
+                title: 'Maternal Emergency',
+                icon: 'fa-baby',
+                color: 'bg-pink-500',
+                textColor: 'text-pink-500',
+                checklist: [
+                    'Call 102 for emergency transport',
+                    'If pregnant over 20 weeks: Lie on left side',
+                    'Check for heavy bleeding - apply pressure',
+                    'Monitor breathing and consciousness',
+                    'Do NOT give anything by mouth',
+                    'Keep warm and calm',
+                    'Prepare for delivery if imminent',
+                    'Note time of any contractions'
+                ]
+            },
+            seizure: {
+                title: 'Seizure Handling',
+                icon: 'fa-bolt',
+                color: 'bg-indigo-500',
+                textColor: 'text-indigo-500',
+                protocol: [
+                    { title: 'Stay Calm', desc: 'Most seizures last less than 2 minutes. Time the seizure if possible.' },
+                    { title: 'Protect Head', desc: 'Place something soft under head. Remove nearby dangerous objects.' },
+                    { title: 'Turn on Side', desc: 'If possible, gently turn person on their side to prevent choking.' },
+                    { title: 'Do NOT', desc: 'Do NOT put anything in mouth. Do NOT hold person down. Do NOT give water during seizure.' },
+                    { title: 'After Seizure', desc: 'Person may be confused. Speak gently. Check breathing.' },
+                    { title: 'When to Call 102', desc: 'Seizure over 5 minutes, not breathing, injury during seizure, first seizure, pregnant, or diabetic.' }
+                ]
+            },
+            child: {
+                title: 'Child Emergency',
+                icon: 'fa-child',
+                color: 'bg-cyan-500',
+                textColor: 'text-cyan-500',
+                checklist: [
+                    'Stay calm - children sense your stress',
+                    'Check responsiveness - tap and call name',
+                    'Call 102 immediately for any serious emergency',
+                    'If not breathing: 30 compressions, 2 rescue breaths or just compressions if untrained',
+                    'For choking: 5 back blows, 5 abdominal thrusts Heimlich',
+                    'Do NOT shake a child who is unresponsive',
+                    'Keep child warm and comfortable',
+                    'Bring any medications or medical records'
+                ]
+            }
+        };
+
+        // Open Emergency Triage
+        function openEmergencyTriage() {
+            document.getElementById('emergencyOverlay').classList.remove('hidden');
+            document.getElementById('emergencyTypeSelect').classList.remove('hidden');
+            document.getElementById('emergencyProtocol').classList.add('hidden');
+            currentEmergency = null;
+        }
+
+        // Close Emergency Triage
+        function closeEmergencyTriage() {
+            document.getElementById('emergencyOverlay').classList.add('hidden');
+            stopCPR();
+            resetFAST();
+        }
+
+        // Select Emergency Type
+        function selectEmergency(type) {
+            currentEmergency = type;
+            const protocol = emergencyProtocols[type];
+            const container = document.getElementById('emergencyProtocol');
+            
+            document.getElementById('emergencyTypeSelect').classList.add('hidden');
+            container.classList.remove('hidden');
+            
+            let html = '<button onclick="backToSelect()" class="action-btn action-btn-back mb-6"><i class="fas fa-arrow-left"></i> Back to Emergency Types</button>';
+            
+            html += '<div class="flex items-center gap-4 mb-8"><div class="w-16 h-16 ' + protocol.color + '/20 rounded-2xl flex items-center justify-center"><i class="fas ' + protocol.icon + ' ' + protocol.textColor + ' text-2xl"></i></div><div><h3 class="text-2xl font-bold text-white">' + protocol.title + '</h3><p class="text-slate-400">Follow these steps carefully</p></div></div>';
+            
+            if (protocol.showCPR) {
+                html += getCPRTimerHTML();
+            }
+            
+            if (protocol.showFAST) {
+                html += getFASTHTML();
+            }
+            
+            if (protocol.protocol) {
+                html += '<div class="protocol-section">';
+                protocol.protocol.forEach((step, index) => {
+                    html += '<div class="protocol-step" id="step-' + index + '"><div class="step-number">' + (index + 1) + '</div><div class="step-content"><h4>' + step.title + '</h4><p>' + step.desc + '</p></div></div>';
+                });
+                html += '</div>';
+            }
+            
+            if (protocol.checklist) {
+                html += '<div class="protocol-section">';
+                protocol.checklist.forEach((item, index) => {
+                    const key = type + '-' + index;
+                    html += '<div class="checklist-item" id="check-' + key + '" onclick="toggleCheck(\'' + key + '\')"><div class="check-box"><i class="fas fa-check"></i></div><span class="checklist-text">' + item + '</span></div>';
+                });
+                html += '</div>';
+            }
+            
+            html += '<div class="action-buttons"><button onclick="callEmergency()" class="action-btn action-btn-call"><i class="fas fa-phone"></i> Call 102</button></div>';
+            
+            container.innerHTML = html;
+        }
+
+        function backToSelect() {
+            document.getElementById('emergencyTypeSelect').classList.remove('hidden');
+            document.getElementById('emergencyProtocol').classList.add('hidden');
+            stopCPR();
+            resetFAST();
+        }
+
+        function getCPRTimerHTML() {
+            return '<div class="cpr-timer"><div class="cpr-timer-label">CPR Timer</div><div class="cpr-timer-display" id="cprDisplay">00:00</div><div class="cpr-counter" id="cprCounter">Compressions: 0</div><div class="cpr-controls"><button onclick="startCPR()" class="cpr-btn cpr-btn-start" id="cprStartBtn"><i class="fas fa-play"></i> Start CPR</button><button onclick="stopCPR()" class="cpr-btn cpr-btn-stop hidden" id="cprStopBtn"><i class="fas fa-stop"></i> Stop</button><button onclick="resetCPR()" class="cpr-btn cpr-btn-reset"><i class="fas fa-redo"></i> Reset</button></div><div class="cpr-compressions mt-6"><p class="text-white font-semibold mb-2"><i class="fas fa-info-circle text-primary mr-2"></i> CPR Guidelines:</p><p class="text-slate-400 text-sm">100-120 compressions per minute - Push hard and fast in center of chest - Allow full chest recoil between compressions</p></div></div>';
+        }
+
+        function startCPR() {
+            if (cprInterval) return;
+            document.getElementById('cprStartBtn').classList.add('hidden');
+            document.getElementById('cprStopBtn').classList.remove('hidden');
+            cprInterval = setInterval(function() {
+                cprSeconds++;
+                const minutes = Math.floor(cprSeconds / 60).toString().padStart(2, '0');
+                const seconds = (cprSeconds % 60).toString().padStart(2, '0');
+                document.getElementById('cprDisplay').textContent = minutes + ':' + seconds;
+                compressionCount++;
+                document.getElementById('cprCounter').textContent = 'Compressions: ' + compressionCount;
+                if (compressionCount % 30 === 0) {
+                    speak('Give 2 breaths');
+                }
+            }, 1000);
+        }
+
+        function stopCPR() {
+            if (cprInterval) {
+                clearInterval(cprInterval);
+                cprInterval = null;
+            }
+            document.getElementById('cprStartBtn').classList.remove('hidden');
+            document.getElementById('cprStopBtn').classList.add('hidden');
+        }
+
+        function resetCPR() {
+            stopCPR();
+            cprSeconds = 0;
+            compressionCount = 0;
+            document.getElementById('cprDisplay').textContent = '00:00';
+            document.getElementById('cprCounter').textContent = 'Compressions: 0';
+        }
+
+        function getFASTHTML() {
+            return '<div class="fast-test"><div class="fast-item" id="fast-F"><div class="fast-letter">F</div><div class="fast-content"><h4>Face</h4><p>Ask person to smile. Does one side of face droop?</p><button onclick="markFAST(\'F\', true)" class="fast-btn fast-btn-yes mr-2">Yes</button><button onclick="markFAST(\'F\', false)" class="fast-btn fast-btn-no">No</button></div></div><div class="fast-item" id="fast-A"><div class="fast-letter">A</div><div class="fast-content"><h4>Arms</h4><p>Ask person to raise both arms. Does one arm drift downward?</p><button onclick="markFAST(\'A\', true)" class="fast-btn fast-btn-yes mr-2">Yes</button><button onclick="markFAST(\'A\', false)" class="fast-btn fast-btn-no">No</button></div></div><div class="fast-item" id="fast-S"><div class="fast-letter">S</div><div class="fast-content"><h4>Speech</h4><p>Ask person to say a simple sentence. Is speech slurred or strange?</p><button onclick="markFAST(\'S\', true)" class="fast-btn fast-btn-yes mr-2">Yes</button><button onclick="markFAST(\'S\', false)" class="fast-btn fast-btn-no">No</button></div></div><div class="fast-item" id="fast-T"><div class="fast-letter">T</div><div class="fast-content"><h4>Time</h4><p>If any YES to above: Note the time symptoms started. Call 102 immediately!</p><button onclick="callEmergency()" class="fast-btn fast-btn-yes"><i class="fas fa-phone"></i> Call 102 Now</button></div></div><div class="fast-result hidden" id="fastResult"></div></div>';
+        }
+
+        function markFAST(letter, positive) {
+            fastResults[letter] = positive;
+            const item = document.getElementById('fast-' + letter);
+            const letterEl = item.querySelector('.fast-letter');
+            if (positive) {
+                item.classList.add('completed');
+                letterEl.classList.add('done');
+            } else {
+                item.classList.remove('completed');
+                letterEl.classList.remove('done');
+            }
+            const positiveCount = Object.values(fastResults).filter(function(v) { return v === true; }).length;
+            const resultEl = document.getElementById('fastResult');
+            if (letter === 'T') {
+                resultEl.classList.remove('hidden');
+                if (positiveCount >= 1) {
+                    resultEl.className = 'fast-result stroke';
+                    resultEl.innerHTML = '<h3><i class="fas fa-exclamation-triangle mr-2"></i> STROKE SUSPECTED!</h3><p class="text-white">Call 102 immediately. Note: Symptoms started at ' + new Date().toLocaleTimeString() + '</p>';
+                    speak('Stroke suspected. Call emergency services immediately.');
+                } else {
+                    resultEl.className = 'fast-result no-stroke';
+                    resultEl.innerHTML = '<h3><i class="fas fa-check-circle mr-2"></i> No obvious stroke signs</h3><p class="text-white">But if symptoms worsen, call 102. Continue monitoring.</p>';
+                }
+            }
+        }
+
+        function resetFAST() {
+            fastResults = { F: false, A: false, S: false, T: false };
+            document.querySelectorAll('.fast-item').forEach(function(item) {
+                item.classList.remove('completed');
+                item.querySelector('.fast-letter').classList.remove('done');
+            });
+            const resultEl = document.getElementById('fastResult');
+            if (resultEl) resultEl.classList.add('hidden');
+        }
+
+        function toggleCheck(key) {
+            checklistStatus[key] = !checklistStatus[key];
+            const item = document.getElementById('check-' + key);
+            if (checklistStatus[key]) {
+                item.classList.add('checked');
+            } else {
+                item.classList.remove('checked');
+            }
+        }
+
+        function callEmergency() {
+            window.location.href = 'tel:102';
+        }
+
+        function toggleVoice() {
+            const btn = document.getElementById('voiceBtn');
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('Voice recognition is not supported in this browser. Please use Chrome.');
+                return;
+            }
+            var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!isListening) {
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+                recognition.onstart = function() {
+                    isListening = true;
+                    btn.classList.add('listening');
+                    speak('Listening for emergency command. Say: cardiac, stroke, burn, or help.');
+                };
+                recognition.onresult = function(event) {
+                    var last = event.results.length - 1;
+                    var command = event.results[last][0].transcript.toLowerCase().trim();
+                    console.log('Voice command:', command);
+                    if (command.includes('cardiac') || command.includes('heart')) {
+                        selectEmergency('cardiac');
+                        speak('Cardiac arrest protocol activated. Check responsiveness and start CPR.');
+                    } else if (command.includes('stroke')) {
+                        selectEmergency('stroke');
+                        speak('Stroke assessment. Perform FAST test.');
+                    } else if (command.includes('burn')) {
+                        selectEmergency('burn');
+                        speak('Burn protocol activated. Cool the burn with water.');
+                    } else if (command.includes('bleed') || command.includes('trauma') || command.includes('accident')) {
+                        selectEmergency('trauma');
+                        speak('Trauma protocol activated. Apply direct pressure.');
+                    } else if (command.includes('poison')) {
+                        selectEmergency('poisoning');
+                        speak('Poisoning protocol. Call poison control.');
+                    } else if (command.includes('snake')) {
+                        selectEmergency('snakebite');
+                        speak('Snakebite protocol. Keep calm.');
+                    } else if (command.includes('seizure')) {
+                        selectEmergency('seizure');
+                        speak('Seizure protocol. Protect the head.');
+                    } else if (command.includes('child') || command.includes('baby')) {
+                        selectEmergency('child');
+                        speak('Child emergency protocol activated.');
+                    } else if (command.includes('pregnant') || command.includes('maternal')) {
+                        selectEmergency('maternal');
+                        speak('Maternal emergency protocol.');
+                    } else if (command.includes('help') || command.includes('emergency')) {
+                        openEmergencyTriage();
+                        speak('Emergency triage opened.');
+                    }
+                };
+                recognition.onerror = function(event) {
+                    console.error('Speech recognition error:', event.error);
+                    isListening = false;
+                    btn.classList.remove('listening');
+                };
+                recognition.onend = function() {
+                    isListening = false;
+                    btn.classList.remove('listening');
+                };
+                recognition.start();
+            } else {
+                recognition.stop();
+                isListening = false;
+                btn.classList.remove('listening');
+            }
+        }
+
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                var utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 1;
+                utterance.pitch = 1;
+                utterance.volume = 1;
+                speechSynthesis.speak(utterance);
+            }
+        }
+    </script>
+    <script>
+        src = "https://apis.mapples.com/advancedmaps/api/cxizkhmgyrrlpgikiwkegbzkfkqwttccbhgx/map_sdk?layer=vector&v=3.0"
+    </script>
+
+    <script>
+        var mapple = new mapples.Map('map',{
+            center: [28.61,77.23],
+            zoom: 10
+        });
+    </script>
+</body>
+</html>

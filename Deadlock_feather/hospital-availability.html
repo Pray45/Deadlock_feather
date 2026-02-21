@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediCommand | Real-Time Hospital Availability Engine</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- AOS Animation Library -->
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#e21d48',
+                        'primary-dark': '#c4123a',
+                        'primary-light': '#ff4d6d',
+                        'background-dark': '#0a0506',
+                        'background-card': '#120a0d',
+                        'border-dark': '#2d161b',
+                        'border-light': '#3d2630',
+                        success: '#10b981',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        info: '#3b82f6',
+                        purple: '#8b5cf6'
+                    },
+                    fontFamily: {
+                        display: ['Inter', 'sans-serif']
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                        'slide-up': 'slideUp 0.5s ease-out',
+                        'slide-in': 'slideIn 0.3s ease-out',
+                        'fade-in': 'fadeIn 0.5s ease-out'
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-10px)' }
+                        },
+                        glow: {
+                            '0%': { boxShadow: '0 0 20px rgba(226, 29, 72, 0.3)' },
+                            '100%': { boxShadow: '0 0 40px rgba(226, 29, 72, 0.6)' }
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        },
+                        slideIn: {
+                            '0%': { transform: 'translateX(-20px)', opacity: '0' },
+                            '100%': { transform: 'translateX(0)', opacity: '1' }
+                        },
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0506;
+            color: white;
+            min-height: 100vh;
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(226, 29, 72, 0.5);
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(226, 29, 72, 0.8);
+        }
+        
+        /* Glassmorphism */
+        .glass {
+            background: rgba(18, 10, 13, 0.8);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(226, 29, 72, 0.2);
+        }
+        
+        .glass-card {
+            background: linear-gradient(135deg, rgba(18, 10, 13, 0.9) 0%, rgba(30, 15, 20, 0.8) 100%);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 29, 72, 0.15);
+            transition: all 0.3s ease;
+        }
+        
+        .glass-card:hover {
+            border-color: rgba(226, 29, 72, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(226, 29, 72, 0.2);
+        }
+        
+        /* Status Indicators */
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-available {
+            background: #10b981;
+            box-shadow: 0 0 10px #10b981;
+        }
+        
+        .status-limited {
+            background: #f59e0b;
+            box-shadow: 0 0 10px #f59e0b;
+        }
+        
+        .status-critical {
+            background: #ef4444;
+            box-shadow: 0 0 10px #ef4444;
+        }
+        
+        /* Progress Bars */
+        .capacity-bar {
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+        
+        .capacity-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        
+        /* Ranking Badge */
+        .rank-badge {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+        
+        .rank-1 {
+            background: linear-gradient(135deg, #ffd700 0%, #ffb700 100%);
+            color: #1a0d10;
+        }
+        
+        .rank-2 {
+            background: linear-gradient(135deg, #c0c0c0 0%, #a0a0a0 100%);
+            color: #1a0d10;
+        }
+        
+        .rank-3 {
+            background: linear-gradient(135deg, #cd7f32 0%, #b87333 100%);
+            color: #1a0d10;
+        }
+        
+        .rank-default {
+            background: rgba(255, 255, 255, 0.1);
+            color: #94a3b8;
+        }
+        
+        /* Specialty Tags */
+        .specialty-tag {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .tag-trauma {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .tag-stroke {
+            background: rgba(139, 92, 246, 0.2);
+            color: #a78bfa;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+        
+        .tag-cardiac {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .tag-maternity {
+            background: rgba(236, 72, 153, 0.2);
+            color: #f472b6;
+            border: 1px solid rgba(236, 72, 153, 0.3);
+        }
+        
+        .tag-burn {
+            background: rgba(249, 115, 22, 0.2);
+            color: #fb923c;
+            border: 1px solid rgba(249, 115, 22, 0.3);
+        }
+        
+        /* Map Container */
+        .map-container {
+            height: 400px;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid rgba(226, 29, 72, 0.2);
+        }
+        
+        /* Pulse Animation for Live Data */
+        @keyframes livePulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .live-indicator {
+            animation: livePulse 2s infinite;
+        }
+        
+        /* Sorting Dropdown */
+        .sort-dropdown {
+            background: rgba(18, 10, 13, 0.9);
+            border: 1px solid rgba(226, 29, 72, 0.3);
+            border-radius: 12px;
+            padding: 8px 16px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .sort-dropdown:hover {
+            border-color: rgba(226, 29, 72, 0.6);
+        }
+        
+        .sort-dropdown:focus {
+            outline: none;
+            border-color: #e21d48;
+        }
+        
+        /* Filter Pills */
+        .filter-pill {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 1px solid transparent;
+        }
+        
+        .filter-pill.active {
+            background: rgba(226, 29, 72, 0.2);
+            border-color: rgba(226, 29, 72, 0.5);
+            color: #e21d48;
+        }
+        
+        .filter-pill:not(.active) {
+            background: rgba(255, 255, 255, 0.05);
+            color: #94a3b8;
+        }
+        
+        .filter-pill:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        /* Resource Icons Grid */
+        .resource-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+        
+        @media (max-width: 768px) {
+            .resource-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        /* Loading Skeleton */
+        .skeleton {
+            background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        
+        /* Emergency Banner */
+        .emergency-banner {
+            background: linear-gradient(90deg, #e21d48, #c4123a, #e21d48);
+            background-size: 200% 100%;
+            animation: gradientShift 3s ease infinite;
+        }
+        
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+    </style>
+</head>
+<body class="bg-[#0a0506]">
+    <!-- Emergency Banner -->
+    <div class="emergency-banner py-2 text-center text-white text-sm font-semibold">
+        <div class="flex items-center justify-center gap-3">
+            <i class="fas fa-ambulance animate-pulse"></i>
+            <span>REAL-TIME HOSPITAL AVAILABILITY ENGINE</span>
+            <span class="live-indicator flex items-center gap-2">
+                <span class="w-2 h-2 bg-white rounded-full"></span>
+                LIVE
+            </span>
+        </div>
+    </div>
+
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header Section -->
+        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4" data-aos="fade-up">
+            <div class="flex items-center gap-4">
+                <a href="index.html" class="glass p-3 rounded-xl text-white hover:bg-primary/20 transition-all">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <div>
+                    <h1 class="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+                        Hospital Availability
+                    </h1>
+                <p class="text-gray-400 mt-2 flex items-center gap-2">
+                    <i class="fas fa-map-marker-alt text-primary"></i>
+                    Dynamic ranking based on distance, travel time, resources & emergency specialization
+                </p>
+            </div>
+            
+            <!-- Search & Filter Controls -->
+            <div class="flex flex-wrap gap-3">
+                <div class="relative">
+                    <input type="text" id="searchInput" placeholder="Search hospitals..." 
+                        class="glass pl-10 pr-4 py-3 rounded-xl text-white placeholder-gray-500 w-64 focus:outline-none focus:border-primary">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+                </div>
+                
+                <select id="sortBy" class="sort-dropdown">
+                    <option value="score">Best Match (AI Score)</option>
+                    <option value="distance">Distance</option>
+                    <option value="travelTime">Travel Time</option>
+                    <option value="resources">Resource Availability</option>
+                    <option value="load">Current Load</option>
+                </select>
+                
+                <button id="refreshBtn" class="glass px-4 py-3 rounded-xl text-white hover:bg-primary/20 transition-all">
+                    <i class="fas fa-sync-alt mr-2"></i>Refresh
+                </button>
+            </div>
+        </div>
+
+        <!-- Quick Filters -->
+        <div class="flex flex-wrap gap-2 mb-6" data-aos="fade-up" data-aos-delay="100">
+            <button class="filter-pill active" data-filter="all">
+                <i class="fas fa-hospital mr-2"></i>All
+            </button>
+            <button class="filter-pill" data-filter="trauma">
+                <i class="fas fa-ambulance mr-2"></i>Trauma
+            </button>
+            <button class="filter-pill" data-filter="stroke">
+                <i class="fas fa-brain mr-2"></i>Stroke
+            </button>
+            <button class="filter-pill" data-filter="cardiac">
+                <i class="fas fa-heartbeat mr-2"></i>Cardiac
+            </button>
+            <button class="filter-pill" data-filter="maternity">
+                <i class="fas fa-baby mr-2"></i>Maternity
+            </button>
+            <button class="filter-pill" data-filter="icu">
+                <i class="fas fa-procedures mr-2"></i>ICU Available
+            </button>
+            <button class="filter-pill" data-filter="ventilator">
+                <i class="fas fa-wind mr-2"></i>Ventilator
+            </button>
+        </div>
+
+        <!-- Stats Overview -->
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8" data-aos="fade-up" data-aos-delay="200">
+            <div class="glass-card rounded-2xl p-4 text-center">
+                <div class="text-2xl font-bold text-white" id="totalHospitals">12</div>
+                <div class="text-gray-400 text-sm">Total Hospitals</div>
+            </div>
+            <div class="glass-card rounded-2xl p-4 text-center">
+                <div class="text-2xl font-bold text-success" id="availableICUs">8</div>
+                <div class="text-gray-400 text-sm">ICUs Available</div>
+            </div>
+            <div class="glass-card rounded-2xl p-4 text-center">
+                <div class="text-2xl font-bold text-warning" id="availableVentilators">15</div>
+                <div class="text-gray-400 text-sm">Ventilators</div>
+            </div>
+            <div class="glass-card rounded-2xl p-4 text-center">
+                <div class="text-2xl font-bold text-info" id="strokeCenters">4</div>
+                <div class="text-gray-400 text-sm">Stroke Centers</div>
+            </div>
+            <div class="glass-card rounded-2xl p-4 text-center">
+                <div class="text-2xl font-bold text-primary" id="traumaCenters">6</div>
+                <div class="text-gray-400 text-sm">Trauma Centers</div>
+            </div>
+            <div class="glass-card rounded-2xl p-4 text-center">
+                <div class="text-2xl font-bold text-purple" id="cathLabs">3</div>
+                <div class="text-gray-400 text-sm">Cath Labs</div>
+            </div>
+        </div>
+
+        <!-- Map Section -->
+        <div class="glass-card rounded-2xl p-4 mb-8" data-aos="fade-up" data-aos-delay="300">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold flex items-center gap-2">
+                    <i class="fas fa-map-marked-alt text-primary"></i>
+                    Interactive Map
+                </h2>
+                <span class="text-gray-400 text-sm">
+                    <i class="fas fa-circle text-success text-xs mr-1"></i>Available
+                    <i class="fas fa-circle text-warning text-xs mx-2"></i>Limited
+                    <i class="fas fa-circle text-danger text-xs"></i>Critical
+                </span>
+            </div>
+            <div id="map" class="map-container"></div>
+        </div>
+
+        <!-- Hospital List -->
+        <div class="mb-4 flex items-center justify-between">
+            <h2 class="text-xl font-semibold flex items-center gap-2" data-aos="fade-up">
+                <i class="fas fa-list text-primary"></i>
+                Ranked Hospitals
+                <span class="text-gray-400 text-sm font-normal ml-2" id="hospitalCount">(12 found)</span>
+            </h2>
+        </div>
+
+        <!-- Hospital Cards Container -->
+        <div id="hospitalList" class="space-y-4">
+            <!-- Dynamic content will be inserted here -->
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- AOS Animation JS -->
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+
+    <script>
+        // Initialize AOS
+        AOS.init({
+            duration: 800,
+            once: true,
+            offset: 100
+        });
+
+        // Sample Hospital Data
+        const hospitals = [
+            {
+                id: 1,
+                name: "Metro General Hospital",
+                address: "123 Medical Center Drive",
+                phone: "+1 (555) 123-4567",
+                coordinates: [28.6139, 77.2090],
+                distance: 2.3,
+                travelTime: 8,
+                image: "🏥",
+                rating: 4.8,
+                reviews: 234,
+                // Bed Availability
+                beds: {
+                    general: { total: 150, available: 23 },
+                    icu: { total: 30, available: 5 },
+                    nicu: { total: 20, available: 8 },
+                    picu: { total: 15, available: 3 }
+                },
+                // Resources
+                ventilators: { total: 20, available: 12 },
+                oxygenCapacity: { total: 500, available: 320, unit: "cylinders" },
+                emergencyRoomLoad: 65,
+                // Specializations
+                trauma: true,
+                stroke: true,
+                cardiac: true,
+                maternity: true,
+                burn: false,
+                // Additional Services
+                bloodBank: { available: true, types: ["A+", "A-", "B+", "O+", "O-", "AB+"], stockLevel: 75 },
+                antivenom: { available: true, types: ["Snake", "Scorpion", "Spider"] },
+                cathLab: { available: true, waitTime: 15 },
+                // Load Factor
+                loadFactor: 72,
+                score: 95
+            },
+            {
+                id: 2,
+                name: "City Medical Center",
+                address: "456 Healthcare Ave",
+                phone: "+1 (555) 234-5678",
+                coordinates: [28.6304, 77.2177],
+                distance: 3.8,
+                travelTime: 12,
+                image: "🏨",
+                rating: 4.5,
+                reviews: 189,
+                beds: {
+                    general: { total: 200, available: 45 },
+                    icu: { total: 40, available: 2 },
+                    nicu: { total: 25, available: 12 },
+                    picu: { total: 10, available: 0 }
+                },
+                ventilators: { total: 25, available: 18 },
+                oxygenCapacity: { total: 750, available: 420, unit: "cylinders" },
+                emergencyRoomLoad: 45,
+                trauma: true,
+                stroke: true,
+                cardiac: false,
+                maternity: true,
+                burn: true,
+                bloodBank: { available: true, types: ["A+", "B+", "O+", "O-"], stockLevel: 45 },
+                antivenom: { available: true, types: ["Snake"] },
+                cathLab: { available: false },
+                loadFactor: 58,
+                score: 88
+            },
+            {
+                id: 3,
+                name: "St. Mary's Emergency Hospital",
+                address: "789 Emergency Blvd",
+                phone: "+1 (555) 345-6789",
+                coordinates: [28.5921, 77.2295],
+                distance: 5.1,
+                travelTime: 18,
+                image: "⛑️",
+                rating: 4.9,
+                reviews: 312,
+                beds: {
+                    general: { total: 180, available: 12 },
+                    icu: { total: 35, available: 8 },
+                    nicu: { total: 15, available: 4 },
+                    picu: { total: 12, available: 6 }
+                },
+                ventilators: { total: 22, available: 5 },
+                oxygenCapacity: { total: 600, available: 180, unit: "cylinders" },
+                emergencyRoomLoad: 85,
+                trauma: true,
+                stroke: true,
+                cardiac: true,
+                maternity: false,
+                burn: false,
+                bloodBank: { available: true, types: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"], stockLevel: 90 },
+                antivenom: { available: false },
+                cathLab: { available: true, waitTime: 5 },
+                loadFactor: 88,
+                score: 82
+            },
+            {
+                id: 4,
+                name: "Children's Specialty Hospital",
+                address: "321 Kids Care Lane",
+                phone: "+1 (555) 456-7890",
+                coordinates: [28.6445, 77.1965],
+                distance: 4.2,
+                travelTime: 14,
+                image: "🧒",
+                rating: 4.7,
+                reviews: 156,
+                beds: {
+                    general: { total: 80, available: 34 },
+                    icu: { total: 20, available: 15 },
+                    nicu: { total: 40, available: 22 },
+                    picu: { total: 25, available: 18 }
+                },
+                ventilators: { total: 15, available: 10 },
+                oxygenCapacity: { total: 200, available: 150, unit: "cylinders" },
+                emergencyRoomLoad: 35,
+                trauma: false,
+                stroke: false,
+                cardiac: false,
+                maternity: false,
+                burn: false,
+                bloodBank: { available: true, types: ["A+", "A-", "B+", "O+", "AB+"], stockLevel: 60 },
+                antivenom: { available: false },
+                cathLab: { available: false },
+                loadFactor: 35,
+                score: 78
+            },
+            {
+                id: 5,
+                name: "Trauma & Critical Care Institute",
+                address: "555 Critical Care Rd",
+                phone: "+1 (555) 567-8901",
+                coordinates: [28.5750, 77.2100],
+                distance: 7.5,
+                travelTime: 22,
+                image: "🚑",
+                rating: 4.6,
+                reviews: 278,
+                beds: {
+                    general: { total: 120, available: 8 },
+                    icu: { total: 50, available: 3 },
+                    nicu: { total: 10, available: 2 },
+                    picu: { total: 8, available: 1 }
+                },
+                ventilators: { total: 35, available: 2 },
+                oxygenCapacity: { total: 800, available: 250, unit: "cylinders" },
+                emergencyRoomLoad: 95,
+                trauma: true,
+                stroke: true,
+                cardiac: true,
+                maternity: false,
+                burn: true,
+                bloodBank: { available: true, types: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"], stockLevel: 95 },
+                antivenom: { available: true, types: ["Snake", "Scorpion", "Spider", "Snake"] },
+                cathLab: { available: true, waitTime: 0 },
+                loadFactor: 96,
+                score: 75
+            },
+            {
+                id: 6,
+                name: "Heart & Vascular Center",
+                address: "777 Cardiac Circle",
+                phone: "+1 (555) 678-9012",
+                coordinates: [28.6350, 77.2350],
+                distance: 6.0,
+                travelTime: 20,
+                image: "❤️",
+                rating: 4.9,
+                reviews: 445,
+                beds: {
+                    general: { total: 100, available: 28 },
+                    icu: { total: 25, available: 12 },
+                    nicu: { total: 5, available: 5 },
+                    picu: { total: 5, available: 4 }
+                },
+                ventilators: { total: 18, available: 14 },
+                oxygenCapacity: { total: 350, available: 280, unit: "cylinders" },
+                emergencyRoomLoad: 40,
+                trauma: false,
+                stroke: true,
+                cardiac: true,
+                maternity: false,
+                burn: false,
+                bloodBank: { available: true, types: ["A+", "A-", "B+", "O+", "AB+", "AB-"], stockLevel: 70 },
+                antivenom: { available: false },
+                cathLab: { available: true, waitTime: 0 },
+                loadFactor: 42,
+                score: 92
+            },
+            {
+                id: 7,
+                name: "Women's Health & Maternity Hospital",
+                address: "888 Mother & Child Way",
+                phone: "+1 (555) 789-0123",
+                coordinates: [28.6200, 77.1900],
+                distance: 3.5,
+                travelTime: 10,
+                image: "👶",
+                rating: 4.8,
+                reviews: 567,
+                beds: {
+                    general: { total: 90, available: 15 },
+                    icu: { total: 15, available: 10 },
+                    nicu: { total: 35, available: 20 },
+                    picu: { total: 8, available: 5 }
+                },
+                ventilators: { total: 12, available: 8 },
+                oxygenCapacity: { total: 250, available: 190, unit: "cylinders" },
+                emergencyRoomLoad: 30,
+                trauma: false,
+                stroke: false,
+                cardiac: false,
+                maternity: true,
+                burn: false,
+                bloodBank: { available: true, types: ["A+", "A-", "B+", "O+", "AB+"], stockLevel: 55 },
+                antivenom: { available: false },
+                cathLab: { available: false },
+                loadFactor: 28,
+                score: 85
+            },
+            {
+                id: 8,
+                name: "Community General Hospital",
+                address: "999 Community Dr",
+                phone: "+1 (555) 890-1234",
+                coordinates: [28.6500, 77.1800],
+                distance: 8.2,
+                travelTime: 25,
+                image: "🏥",
+                rating: 4.3,
+                reviews: 123,
+                beds: {
+                    general: { total: 75, available: 42 },
+                    icu: { total: 12, available: 6 },
+                    nicu: { total: 8, available: 4 },
+                    picu: { total: 5, available: 3 }
+                },
+                ventilators: { total: 8, available: 5 },
+                oxygenCapacity: { total: 150, available: 100, unit: "cylinders" },
+                emergencyRoomLoad: 25,
+                trauma: false,
+                stroke: false,
+                cardiac: false,
+                maternity: true,
+                burn: false,
+                bloodBank: { available: true, types: ["A+", "B+", "O+"], stockLevel: 30 },
+                antivenom: { available: true, types: ["Snake"] },
+                cathLab: { available: false },
+                loadFactor: 22,
+                score: 68
+            },
+            {
+                id: 9,
+                name: "Neuro & Spine Institute",
+                address: "111 Neuro Center Pkwy",
+                phone: "+1 (555) 901-2345",
+                coordinates: [28.6050, 77.2250],
+                distance: 4.8,
+                travelTime: 15,
+                image: "🧠",
+                rating: 4.7,
+                reviews: 198,
+                beds: {
+                    general: { total: 60, available: 12 },
+                    icu: { total: 28, available: 4 },
+                    nicu: { total: 3, available: 3 },
+                    picu: { total: 4, available: 2 }
+                },
+                ventilators: { total: 16, available: 3 },
+                oxygenCapacity: { total: 200, available: 80, unit: "cylinders" },
+                emergencyRoomLoad: 55,
+                trauma: true,
+                stroke: true,
+                cardiac: false,
+                maternity: false,
+                burn: false,
+                bloodBank: { available: true, types: ["A+", "A-", "O+", "O-"], stockLevel: 40 },
+                antivenom: { available: false },
+                cathLab: { available: false },
+                loadFactor: 62,
+                score: 80
+            },
+            {
+                id: 10,
+                name: "Burn & Trauma Center",
+                address: "222 Burn Unit Rd",
+                phone: "+1 (555) 012-3456",
+                coordinates: [28.5850, 77.2150],
+                distance: 6.5,
+                travelTime: 21,
+                image: "🔥",
+                rating: 4.6,
+                reviews: 167,
+                beds: {
+                    general: { total: 45, available: 5 },
+                    icu: { total: 22, available: 1 },
+                    nicu: { total: 2, available: 2 },
+                    picu: { total: 3, available: 1 }
+                },
+                ventilators: { total: 28, available: 1 },
+                oxygenCapacity: { total: 900, available: 150, unit: "cylinders" },
+                emergencyRoomLoad: 92,
+                trauma: true,
+                stroke: false,
+                cardiac: false,
+                maternity: false,
+                burn: true,
+                bloodBank: { available: true, types: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"], stockLevel: 85 },
+                antivenom: { available: true, types: ["Snake", "Scorpion"] },
+                cathLab: { available: false },
+                loadFactor: 94,
+                score: 70
+            },
+            {
+                id: 11,
+                name: "Multi-Specialty Medical Center",
+                address: "333 Multi Care Blvd",
+                phone: "+1 (555) 111-2222",
+                coordinates: [28.6400, 77.2050],
+                distance: 3.0,
+                travelTime: 9,
+                image: "🏥",
+                rating: 4.4,
+                reviews: 289,
+                beds: {
+                    general: { total: 250, available: 67 },
+                    icu: { total: 45, available: 18 },
+                    nicu: { total: 18, available: 9 },
+                    picu: { total: 14, available: 7 }
+                },
+                ventilators: { total: 30, available: 20 },
+                oxygenCapacity: { total: 650, available: 480, unit: "cylinders" },
+                emergencyRoomLoad: 38,
+                trauma: true,
+                stroke: true,
+                cardiac: true,
+                maternity: true,
+                burn: true,
+                bloodBank: { available: true, types: ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"], stockLevel: 80 },
+                antivenom: { available: true, types: ["Snake", "Scorpion", "Spider"] },
+                cathLab: { available: true, waitTime: 10 },
+                loadFactor: 45,
+                score: 90
+            },
+            {
+                id: 12,
+                name: "Rural Health Center",
+                address: "444 Rural Route",
+                phone: "+1 (555) 222-3333",
+                coordinates: [28.6700, 77.2500],
+                distance: 12.0,
+                travelTime: 35,
+                image: "🏡",
+                rating: 4.0,
+                reviews: 78,
+                beds: {
+                    general: { total: 30, available: 20 },
+                    icu: { total: 5, available: 4 },
+                    nicu: { total: 2, available: 2 },
+                    picu: { total: 2, available: 2 }
+                },
+                ventilators: { total: 4, available: 3 },
+                oxygenCapacity: { total: 50, available: 45, unit: "cylinders" },
+                emergencyRoomLoad: 15,
+                trauma: false,
+                stroke: false,
+                cardiac: false,
+                maternity: true,
+                burn: false,
+                bloodBank: { available: false },
+                antivenom: { available: true, types: ["Snake", "Scorpion"] },
+                cathLab: { available: false },
+                loadFactor: 12,
+                score: 55
+            }
+        ];
+
+        // State
+        let currentFilter = 'all';
+        let currentSort = 'score';
+        let searchTerm = '';
+        let map;
+        let markers = [];
+
+        // Initialize Map
+        function initMap() {
+            map = L.map('map').setView([28.6139, 77.2090], 12);
+            
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 19
+            }).addTo(map);
+            
+            renderMarkers();
+        }
+
+        // Render Map Markers
+        function renderMarkers() {
+            // Clear existing markers
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+            
+            const filtered = getFilteredAndSortedHospitals();
+            
+            filtered.forEach(hospital => {
+                const color = hospital.loadFactor < 50 ? '#10b981' : hospital.loadFactor < 75 ? '#f59e0b' : '#ef4444';
+                
+                const icon = L.divIcon({
+                    className: 'custom-marker',
+                    html: `<div style="
+                        width: 30px;
+                        height: 30px;
+                        background: ${color};
+                        border-radius: 50%;
+                        border: 3px solid white;
+                        box-shadow: 0 0 15px ${color};
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 14px;
+                    ">🏥</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+                
+                const marker = L.marker(hospital.coordinates, { icon })
+                    .addTo(map)
+                    .bindPopup(`
+                        <div style="min-width: 200px;">
+                            <h3 style="font-weight: 700; margin-bottom: 8px; color: #e21d48;">${hospital.name}</h3>
+                            <p style="color: #94a3b8; font-size: 12px; margin-bottom: 8px;">${hospital.address}</p>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+                                <div><span style="color: #10b981;">●</span> ICU: ${hospital.beds.icu.available}/${hospital.beds.icu.total}</div>
+                                <div><span style="color: #f59e0b;">●</span> ER Load: ${hospital.emergencyRoomLoad}%</div>
+                                <div><span style="color: #3b82f6;">●</span> Vent: ${hospital.ventilators.available}/${hospital.ventilators.total}</div>
+                                <div><span style="color: #8b5cf6;">●</span> Score: ${hospital.score}</div>
+                            </div>
+                        </div>
+                    `);
+                
+                markers.push(marker);
+            });
+        }
+
+        // Get filtered and sorted hospitals
+        function getFilteredAndSortedHospitals() {
+            let filtered = [...hospitals];
+            
+            // Apply search filter
+            if (searchTerm) {
+                filtered = filtered.filter(h => 
+                    h.name.toLowerCase().includes(searchTerm) || 
+                    h.address.toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            // Apply category filter
+            if (currentFilter !== 'all') {
+                filtered = filtered.filter(h => {
+                    switch(currentFilter) {
+                        case 'trauma': return h.trauma;
+                        case 'stroke': return h.stroke;
+                        case 'cardiac': return h.cardiac;
+                        case 'maternity': return h.maternity;
+                        case 'icu': return h.beds.icu.available > 0;
+                        case 'ventilator': return h.ventilators.available > 0;
+                        default: return true;
+                    }
+                });
+            }
+            
+            // Apply sort
+            filtered.sort((a, b) => {
+                switch(currentSort) {
+                    case 'distance': return a.distance - b.distance;
+                    case 'travelTime': return a.travelTime - b.travelTime;
+                    case 'resources': return (b.ventilators.available + b.beds.icu.available) - (a.ventilators.available + a.beds.icu.available);
+                    case 'load': return a.loadFactor - b.loadFactor;
+                    case 'score': 
+                    default: return b.score - a.score;
+                }
+            });
+            
+            return filtered;
+        }
+
+        // Get status color
+        function getStatusColor(available, total) {
+            const percentage = (available / total) * 100;
+            if (percentage > 30) return 'bg-success';
+            if (percentage > 10) return 'bg-warning';
+            return 'bg-danger';
+        }
+
+        // Create hospital card HTML
+        function createHospitalCard(hospital, index) {
+            return `
+                <div class="glass-card rounded-2xl p-6 animate-slide-up" data-aos="fade-up" data-aos-delay="${index * 50}">
+                    <div class="flex flex-col lg:flex-row gap-6">
+                        <div class="flex lg:flex-col items-center gap-4">
+                            <div class="rank-badge ${index < 3 ? 'rank-' + (index + 1) : 'rank-default'}">
+                                #${index + 1}
+                            </div>
+                            <div class="text-4xl">${hospital.image}</div>
+                        </div>
+                        
+                        <div class="flex-1">
+                            <div class="flex flex-wrap items-start justify-between gap-4 mb-4">
+                                <div>
+                                    <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                                        ${hospital.name}
+                                        ${hospital.score >= 90 ? '<span class="text-xs bg-success/20 text-success px-2 py-1 rounded-full">Recommended</span>' : ''}
+                                    </h3>
+                                    <p class="text-gray-400 text-sm flex items-center gap-2">
+                                        <i class="fas fa-map-marker-alt"></i>
+                                        ${hospital.address}
+                                    </p>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <div class="text-right">
+                                        <div class="text-2xl font-bold text-white">${hospital.score}</div>
+                                        <div class="text-xs text-gray-400">Match Score</div>
+                                    </div>
+                                    <div class="glass px-3 py-2 rounded-xl">
+                                        <div class="flex items-center gap-2 text-sm">
+                                            <i class="fas fa-star text-warning"></i>
+                                            <span class="font-semibold">${hospital.rating}</span>
+                                            <span class="text-gray-400">(${hospital.reviews})</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-4 mb-4">
+                                <div class="glass px-3 py-2 rounded-lg flex items-center gap-2">
+                                    <i class="fas fa-road text-primary"></i>
+                                    <span class="text-sm"><span class="font-semibold text-white">${hospital.distance}</span> km</span>
+                                </div>
+                                <div class="glass px-3 py-2 rounded-lg flex items-center gap-2">
+                                    <i class="fas fa-clock text-primary"></i>
+                                    <span class="text-sm"><span class="font-semibold text-white">${hospital.travelTime}</span> min</span>
+                                </div>
+                                <div class="glass px-3 py-2 rounded-lg flex items-center gap-2">
+                                    <i class="fas fa-user-injured ${hospital.loadFactor > 70 ? 'text-danger' : hospital.loadFactor > 40 ? 'text-warning' : 'text-success'}"></i>
+                                    <span class="text-sm">ER Load: <span class="font-semibold ${hospital.loadFactor > 70 ? 'text-danger' : 'text-white'}">${hospital.loadFactor}%</span></span>
+                                </div>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-2 mb-4">
+                                ${hospital.trauma ? '<span class="specialty-tag tag-trauma"><i class="fas fa-ambulance"></i> Trauma</span>' : ''}
+                                ${hospital.stroke ? '<span class="specialty-tag tag-stroke"><i class="fas fa-brain"></i> Stroke</span>' : ''}
+                                ${hospital.cardiac ? '<span class="specialty-tag tag-cardiac"><i class="fas fa-heartbeat"></i> Cardiac</span>' : ''}
+                                ${hospital.maternity ? '<span class="specialty-tag tag-maternity"><i class="fas fa-baby"></i> Maternity</span>' : ''}
+                                ${hospital.burn ? '<span class="specialty-tag tag-burn"><i class="fas fa-fire"></i> Burn</span>' : ''}
+                                ${hospital.cathLab.available ? '<span class="specialty-tag" style="background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.3);"><i class="fas fa-heart-pulse"></i> Cath Lab</span>' : ''}
+                                ${hospital.bloodBank.available ? '<span class="specialty-tag" style="background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.3);"><i class="fas fa-droplet"></i> Blood Bank</span>' : ''}
+                                ${hospital.antivenom.available ? '<span class="specialty-tag" style="background: rgba(139,92,246,0.2); color: #a78bfa; border: 1px solid rgba(139,92,246,0.3);"><i class="fas fa-syringe"></i> Anti-venom</span>' : ''}
+                            </div>
+                            
+                            <div class="resource-grid">
+                                <div class="glass rounded-xl p-3">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-xs text-gray-400">General</span>
+                                        <span class="status-dot status-${hospital.beds.general.available > 10 ? 'available' : hospital.beds.general.available > 0 ? 'limited' : 'critical'}"></span>
+                                    </div>
+                                    <div class="flex justify-between items-end">
+                                        <span class="text-lg font-bold text-white">${hospital.beds.general.available}</span>
+                                        <span class="text-xs text-gray-400">/ ${hospital.beds.general.total}</span>
+                                    </div>
+                                    <div class="capacity-bar mt-1">
+                                        <div class="capacity-fill ${getStatusColor(hospital.beds.general.available, hospital.beds.general.total)}" style="width: ${(hospital.beds.general.available / hospital.beds.general.total) * 100}%"></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass rounded-xl p-3">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-xs text-gray-400">ICU</span>
+                                        <span class="status-dot status-${hospital.beds.icu.available > 5 ? 'available' : hospital.beds.icu.available > 0 ? 'limited' : 'critical'}"></span>
+                                    </div>
+                                    <div class="flex justify-between items-end">
+                                        <span class="text-lg font-bold ${hospital.beds.icu.available > 0 ? 'text-white' : 'text-danger'}">${hospital.beds.icu.available}</span>
+                                        <span class="text-xs text-gray-400">/ ${hospital.beds.icu.total}</span>
+                                    </div>
+                                    <div class="capacity-bar mt-1">
+                                        <div class="capacity-fill ${getStatusColor(hospital.beds.icu.available, hospital.beds.icu.total)}" style="width: ${(hospital.beds.icu.available / hospital.beds.icu.total) * 100}%"></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass rounded-xl p-3">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-xs text-gray-400">NICU</span>
+                                        <span class="status-dot status-${hospital.beds.nicu.available > 3 ? 'available' : hospital.beds.nicu.available > 0 ? 'limited' : 'critical'}"></span>
+                                    </div>
+                                    <div class="flex justify-between items-end">
+                                        <span class="text-lg font-bold text-white">${hospital.beds.nicu.available}</span>
+                                        <span class="text-xs text-gray-400">/ ${hospital.beds.nicu.total}</span>
+                                    </div>
+                                    <div class="capacity-bar mt-1">
+                                        <div class="capacity-fill ${getStatusColor(hospital.beds.nicu.available, hospital.beds.nicu.total)}" style="width: ${(hospital.beds.nicu.available / hospital.beds.nicu.total) * 100}%"></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass rounded-xl p-3">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-xs text-gray-400">PICU</span>
+                                        <span class="status-dot status-${hospital.beds.picu.available > 2 ? 'available' : hospital.beds.picu.available > 0 ? 'limited' : 'critical'}"></span>
+                                    </div>
+                                    <div class="flex justify-between items-end">
+                                        <span class="text-lg font-bold text-white">${hospital.beds.picu.available}</span>
+                                        <span class="text-xs text-gray-400">/ ${hospital.beds.picu.total}</span>
+                                    </div>
+                                    <div class="capacity-bar mt-1">
+                                        <div class="capacity-fill ${getStatusColor(hospital.beds.picu.available, hospital.beds.picu.total)}" style="width: ${(hospital.beds.picu.available / hospital.beds.picu.total) * 100}%"></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass rounded-xl p-3">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-xs text-gray-400">Ventilators</span>
+                                        <span class="status-dot status-${hospital.ventilators.available > 5 ? 'available' : hospital.ventilators.available > 0 ? 'limited' : 'critical'}"></span>
+                                    </div>
+                                    <div class="flex justify-between items-end">
+                                        <span class="text-lg font-bold text-white">${hospital.ventilators.available}</span>
+                                        <span class="text-xs text-gray-400">/ ${hospital.ventilators.total}</span>
+                                    </div>
+                                    <div class="capacity-bar mt-1">
+                                        <div class="capacity-fill ${getStatusColor(hospital.ventilators.available, hospital.ventilators.total)}" style="width: ${(hospital.ventilators.available / hospital.ventilators.total) * 100}%"></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass rounded-xl p-3">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-xs text-gray-400">Oxygen</span>
+                                        <span class="status-dot status-${hospital.oxygenCapacity.available > 100 ? 'available' : hospital.oxygenCapacity.available > 0 ? 'limited' : 'critical'}"></span>
+                                    </div>
+                                    <div class="flex justify-between items-end">
+                                        <span class="text-lg font-bold text-white">${hospital.oxygenCapacity.available}</span>
+                                        <span class="text-xs text-gray-400">${hospital.oxygenCapacity.unit}</span>
+                                    </div>
+                                    <div class="capacity-bar mt-1">
+                                        <div class="capacity-fill ${getStatusColor(hospital.oxygenCapacity.available, hospital.oxygenCapacity.total)}" style="width: ${(hospital.oxygenCapacity.available / hospital.oxygenCapacity.total) * 100}%"></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="glass rounded-xl p-3">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-xs text-gray-400">Blood Bank</span>
+                                        ${hospital.bloodBank.available ? 
+                                            `<span class="status-dot status-${hospital.bloodBank.stockLevel > 50 ? 'available' : 'limited'}"></span>` : 
+                                            '<span class="text-xs text-danger">N/A</span>'}
+                                    </div>
+                                    ${hospital.bloodBank.available ? `
+                                        <div class="flex justify-between items-end">
+                                            <span class="text-lg font-bold text-white">${hospital.bloodBank.stockLevel}%</span>
+                                            <span class="text-xs text-gray-400">Stock</span>
+                                        </div>
+                                        <div class="capacity-bar mt-1">
+                                            <div class="capacity-fill ${hospital.bloodBank.stockLevel > 50 ? 'bg-success' : 'bg-warning'}" style="width: ${hospital.bloodBank.stockLevel}%"></div>
+                                        </div>
+                                    ` : '<span class="text-xs text-gray-500">Not Available</span>'}
+                                </div>
+                                
+                                <div class="glass rounded-xl p-3">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-xs text-gray-400">Cath Lab</span>
+                                        ${hospital.cathLab.available ? 
+                                            `<span class="status-dot status-available"></span>` : 
+                                            '<span class="text-xs text-gray-500">N/A</span>'}
+                                    </div>
+                                    ${hospital.cathLab.available ? `
+                                        <div class="flex justify-between items-end">
+                                            <span class="text-lg font-bold text-success">Available</span>
+                                            <span class="text-xs text-gray-400">${hospital.cathLab.waitTime} min wait</span>
+                                        </div>
+                                    ` : '<span class="text-xs text-gray-500">Not Available</span>'}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex lg:flex-col gap-3">
+                            <button class="glass px-4 py-3 rounded-xl text-white hover:bg-primary/30 transition-all flex-1 lg:flex-none">
+                                <i class="fas fa-phone mr-2"></i>Call
+                            </button>
+                            <button class="bg-gradient-to-r from-primary to-primary-dark px-4 py-3 rounded-xl text-white hover:shadow-lg hover:shadow-primary/30 transition-all flex-1 lg:flex-none animate-glow">
+                                <i class="fas fa-ambulance mr-2"></i>Request
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Render hospital cards
+        function renderHospitals() {
+            const filtered = getFilteredAndSortedHospitals();
+            const container = document.getElementById('hospitalList');
+            
+            document.getElementById('hospitalCount').textContent = `(${filtered.length} found)`;
+            
+            container.innerHTML = filtered.map((hospital, index) => createHospitalCard(hospital, index)).join('');
+            
+            // Re-render markers
+            renderMarkers();
+        }
+
+        // Update stats
+        function updateStats() {
+            const filtered = getFilteredAndSortedHospitals();
+            
+            document.getElementById('totalHospitals').textContent = hospitals.length;
+            document.getElementById('availableICUs').textContent = hospitals.filter(h => h.beds.icu.available > 0).length;
+            document.getElementById('availableVentilators').textContent = hospitals.reduce((sum, h) => sum + h.ventilators.available, 0);
+            document.getElementById('strokeCenters').textContent = hospitals.filter(h => h.stroke).length;
+            document.getElementById('traumaCenters').textContent = hospitals.filter(h => h.trauma).length;
+            document.getElementById('cathLabs').textContent = hospitals.filter(h => h.cathLab.available).length;
+        }
+
+        // Event Listeners
+        document.getElementById('sortBy').addEventListener('change', (e) => {
+            currentSort = e.target.value;
+            renderHospitals();
+        });
+
+        document.querySelectorAll('.filter-pill').forEach(pill => {
+            pill.addEventListener('click', () => {
+                document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                currentFilter = pill.dataset.filter;
+                renderHospitals();
+            });
+        });
+
+        // Search input handler
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            searchTerm = e.target.value.toLowerCase();
+            renderHospitals();
+        });
+
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            // Simulate refresh with animation
+            const btn = document.getElementById('refreshBtn');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Refreshing...';
+            
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Refresh';
+                renderHospitals();
+                updateStats();
+            }, 1500);
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            renderHospitals();
+            updateStats();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(() => {
+                renderHospitals();
+                updateStats();
+            }, 30000);
+        });
+    </script>
+</body>
+</html>
